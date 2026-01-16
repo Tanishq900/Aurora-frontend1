@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { AlertTriangle } from 'lucide-react';
+import { appEnv } from '../lib/env';
 
 interface SOSConfirmationModalProps {
   isOpen: boolean;
@@ -42,8 +44,7 @@ export default function SOSConfirmationModal({
       return;
     }
 
-    const base = (import.meta as any)?.env?.BASE_URL || '/';
-    const prefix = base.endsWith('/') ? base : `${base}/`;
+    const prefix = appEnv.assetBasePath();
     const alarmCandidates = [
       `${prefix}sos-alarm.mp3`,
       `${prefix}sos-alarm.wav`,
@@ -165,9 +166,11 @@ export default function SOSConfirmationModal({
         }
       `}</style>
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[99999]">
-        <div className="glass-panel-critical rounded-2xl p-8 max-w-md w-full mx-4 pulse-critical">
-          <div className="text-center mb-6">
-            <div className="text-6xl mb-4 animate-pulse">🚨</div>
+        <div className="glass-panel-critical rounded-2xl p-8 max-w-md w-full mx-4 pulse-critical border border-destructive/40">
+          <div className="text-center pb-5 mb-6 border-b border-destructive/30">
+            <div className="mx-auto mb-4 h-14 w-14 rounded-2xl border border-destructive/35 bg-destructive/15 flex items-center justify-center shadow-[0_0_40px_rgba(239,68,68,0.25)]">
+              <AlertTriangle className="h-7 w-7 text-danger" />
+            </div>
             <h2 className="text-3xl font-bold text-danger mb-2">
               {triggerType === 'ai' ? 'AUTO SOS TRIGGERED' : 'EMERGENCY SOS'}
             </h2>
@@ -188,13 +191,13 @@ export default function SOSConfirmationModal({
           <div className="flex gap-4">
             <button
               onClick={onCancel}
-              className="flex-1 px-6 py-4 bg-secondary/60 hover:bg-secondary/80 text-foreground rounded-lg font-semibold text-lg transition-colors border border-border/50"
+              className="flex-1 px-6 py-4 bg-secondary/60 hover:bg-secondary/80 text-foreground rounded-xl font-semibold text-lg transition-colors border border-border/60"
             >
               Cancel
             </button>
             <button
               onClick={onSendNow}
-              className="flex-1 px-6 py-4 bg-danger hover:bg-red-600 text-white rounded-lg font-semibold text-lg transition-colors shadow-lg"
+              className="flex-1 px-6 py-4 bg-danger hover:bg-red-600 text-white rounded-xl font-semibold text-lg transition-colors shadow-[0_18px_50px_rgba(0,0,0,0.6),0_0_50px_rgba(239,68,68,0.35)]"
             >
               Send Now
             </button>

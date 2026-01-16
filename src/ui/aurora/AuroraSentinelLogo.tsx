@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
 import { useId, useMemo, useState } from 'react';
 
+import { appEnv } from '../../lib/env';
+
 interface AuroraSentinelLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   showText?: boolean;
@@ -28,8 +30,7 @@ export default function AuroraSentinelLogo({
   const [logoIndex, setLogoIndex] = useState(0);
 
   const logoCandidates = useMemo(() => {
-    const base = (import.meta as any)?.env?.BASE_URL || '/';
-    const prefix = base.endsWith('/') ? base : `${base}/`;
+    const prefix = appEnv.assetBasePath();
     return [
       `${prefix}aurora-sentinel-logo.png`,
       `${prefix}aurora-sentinel-logo.webp`,
@@ -44,8 +45,10 @@ export default function AuroraSentinelLogo({
   const logoSrc = logoCandidates[logoIndex];
   const logoAvailable = logoIndex < logoCandidates.length;
   const iconSize = Math.max(12, Math.round(iconPx * (Number.isFinite(markScale) ? markScale : 1)));
-  const markBottomMarginClass = (Number.isFinite(markScale) ? markScale : 1) >= 2 ? 'mb-0' : 'mb-2';
-  const textTightClass = (Number.isFinite(markScale) ? markScale : 1) >= 2 ? '-mt-2 leading-none' : 'leading-tight';
+  const safeScale = Number.isFinite(markScale) ? markScale : 1;
+  const markBottomMarginClass = safeScale >= 4 ? '-mb-12' : safeScale >= 2 ? '-mb-6' : 'mb-2';
+  const textTightClass = safeScale >= 4 ? '-mt-8 leading-none' : safeScale >= 2 ? '-mt-5 leading-none' : 'leading-tight';
+  const markImgTightClass = safeScale >= 4 ? 'scale-[1.18] -translate-y-2' : safeScale >= 2 ? 'scale-[1.1] -translate-y-1' : '';
 
   return (
     <div className={`flex flex-col items-center gap-0 ${className}`}>
@@ -70,7 +73,7 @@ export default function AuroraSentinelLogo({
               <img
                 src={logoSrc}
                 alt="Aurora Sentinel"
-                className="absolute inset-0 w-full h-full object-contain"
+                className={`absolute inset-0 w-full h-full object-contain ${markImgTightClass}`}
                 onError={() => setLogoIndex((i) => i + 1)}
               />
             ) : (

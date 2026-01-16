@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SOSEvent } from '../services/sos.service';
 import { sosService } from '../services/sos.service';
+import { AlertTriangle, Bot, CheckCircle2, CheckCircle, MapPin } from 'lucide-react';
 
 interface EventTimelineProps {
   events?: Array<{
@@ -87,34 +88,17 @@ export default function EventTimeline({ events, sosEvent, sosId }: EventTimeline
   const getEventIcon = (type: string) => {
     switch (type) {
       case 'sos_triggered':
-        return '🚨';
+        return <AlertTriangle className="h-4 w-4 text-danger" />;
       case 'ai_risk':
-        return '🤖';
+        return <Bot className="h-4 w-4 text-aurora-cyan" />;
       case 'zone_entered':
-        return '📍';
+        return <MapPin className="h-4 w-4 text-aurora-emerald" />;
       case 'acknowledged':
-        return '✅';
+        return <CheckCircle2 className="h-4 w-4 text-warning" />;
       case 'resolved':
-        return '✔️';
+        return <CheckCircle className="h-4 w-4 text-safe" />;
       default:
-        return '•';
-    }
-  };
-
-  const getEventColor = (type: string) => {
-    switch (type) {
-      case 'sos_triggered':
-        return 'bg-red-500';
-      case 'ai_risk':
-        return 'bg-blue-500';
-      case 'zone_entered':
-        return 'bg-yellow-500';
-      case 'acknowledged':
-        return 'bg-green-500';
-      case 'resolved':
-        return 'bg-emerald-500';
-      default:
-        return 'bg-gray-500';
+        return <div className="h-2 w-2 rounded-full bg-border" />;
     }
   };
 
@@ -139,9 +123,17 @@ export default function EventTimeline({ events, sosEvent, sosId }: EventTimeline
         return `Entered ${zoneType} zone: ${zoneName}`;
       }
       case 'acknowledged':
-        return data?.security_email ? `Security Acknowledged by ${data.security_email}` : 'Security Acknowledged';
+        return data?.security_name
+          ? `Security Acknowledged by ${data.security_name}`
+          : data?.security_email
+            ? `Security Acknowledged by ${data.security_email}`
+            : 'Security Acknowledged';
       case 'resolved':
-        return data?.security_email ? `Security Resolved by ${data.security_email}` : 'Security Resolved';
+        return data?.security_name
+          ? `Security Resolved by ${data.security_name}`
+          : data?.security_email
+            ? `Security Resolved by ${data.security_email}`
+            : 'Security Resolved';
       default:
         return 'Event';
     }
@@ -172,19 +164,16 @@ export default function EventTimeline({ events, sosEvent, sosId }: EventTimeline
   }
 
   return (
-    <div className="relative">
-      {/* Timeline line */}
-      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-700" />
-
-      {/* Events */}
-      <div className="space-y-6">
+    <div>
+      <div className="flex flex-col gap-6">
         {timelineEvents.map((event, index) => (
           <div key={index} className="relative flex items-start gap-4">
+            {index !== timelineEvents.length - 1 ? (
+              <div className="absolute left-4 top-8 h-[calc(100%-8px)] w-0.5 bg-border/70" />
+            ) : null}
             {/* Icon */}
             <div
-              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full ${getEventColor(
-                event.type
-              )} text-white text-sm`}
+              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full border border-border/60 bg-secondary/30 backdrop-blur shadow-[0_0_18px_rgba(0,0,0,0.35)]`}
             >
               {getEventIcon(event.type)}
             </div>

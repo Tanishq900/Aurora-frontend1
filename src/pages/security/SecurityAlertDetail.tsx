@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { sosService, SOSEvent, SOSChatMessage } from '../../services/sos.service';
 import { connectSocket, getSocket } from '../../ws/client';
@@ -27,7 +27,7 @@ export default function SecurityAlertDetail() {
   const [chatDraft, setChatDraft] = useState('');
   const alertUserIdRef = useRef<string | null>(null);
 
-  const loadChat = async () => {
+  const loadChat = useCallback(async () => {
     if (!id) return;
     if (!user) return;
 
@@ -39,7 +39,7 @@ export default function SecurityAlertDetail() {
       setChatForbidden(false);
       setChatMessages(Array.isArray(bundle?.messages) ? (bundle.messages as SOSChatMessage[]) : []);
       setChatReadOnly(Boolean(bundle?.read_only));
-      setChatSecurityEmail(bundle?.chat?.security_email);
+      setChatSecurityEmail(bundle?.chat?.security_name || bundle?.chat?.security_email);
 
       const socket = getSocket();
       if (socket) {
@@ -64,7 +64,20 @@ export default function SecurityAlertDetail() {
     } finally {
       setChatLoading(false);
     }
-  };
+  }, [id, user]);
+
+  const loadAlert = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      const event = await sosService.getSOSById(id);
+      setAlert(event);
+    } catch (error) {
+      console.error('Failed to load alert:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     alertUserIdRef.current = alert?.user_id || null;
@@ -124,7 +137,7 @@ export default function SecurityAlertDetail() {
         socket.emit('leave_sos', id);
       };
     }
-  }, [id]);
+  }, [id, loadAlert]);
 
   useEffect(() => {
     const urls = (alert as any)?.attachment_urls as string[] | undefined;
@@ -133,7 +146,7 @@ export default function SecurityAlertDetail() {
       return;
     }
     setAttachmentUrls(urls);
-  }, [alert?.id, (alert as any)?.attachment_urls]);
+  }, [alert]);
 
   useEffect(() => {
     if (!id) return;
@@ -150,7 +163,7 @@ export default function SecurityAlertDetail() {
         socket.emit('leave_sos_chat', id);
       }
     };
-  }, [id, user?.id]);
+  }, [id, loadChat, user]);
 
   useEffect(() => {
     if (!id) return;
@@ -159,7 +172,7 @@ export default function SecurityAlertDetail() {
     if (alert?.status !== 'acknowledged') return;
     if (!chatForbidden && chatSecurityEmail) return;
     loadChat();
-  }, [alert?.status, chatForbidden, chatSecurityEmail, id, user?.id, user?.role]);
+  }, [alert?.status, chatForbidden, chatSecurityEmail, id, loadChat, user]);
 
   useEffect(() => {
     if (alert?.status === 'resolved') {
@@ -213,19 +226,6 @@ export default function SecurityAlertDetail() {
     } catch (e: any) {
       const msg = e?.response?.data?.error || e?.message || 'Failed to send message';
       setChatError(msg);
-    }
-  };
-
-  const loadAlert = async () => {
-    if (!id) return;
-
-    try {
-      const event = await sosService.getSOSById(id);
-      setAlert(event);
-    } catch (error) {
-      console.error('Failed to load alert:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -316,12 +316,14 @@ export default function SecurityAlertDetail() {
     motion: feed.motion?.intensity * 25 || 0,
   }));
 
-  const lat = alert.location?.lat;
-  const lng = alert.location?.lng;
-  const hasCoordinates = typeof lat === 'number' && typeof lng === 'number';
+  const rawLat: any = alert.location?.lat;
+  const rawLng: any = alert.location?.lng;
+  const lat = typeof rawLat === 'number' ? rawLat : typeof rawLat === 'string' ? Number.parseFloat(rawLat) : undefined;
+  const lng = typeof rawLng === 'number' ? rawLng : typeof rawLng === 'string' ? Number.parseFloat(rawLng) : undefined;
+  const hasCoordinates = typeof lat === 'number' && Number.isFinite(lat) && typeof lng === 'number' && Number.isFinite(lng);
 
   return (
-    <div className="min-h-screen aurora-gradient p-6 relative">
+    <div className="min-h-screen bg-black p-6 relative">
       <div className="aurora-bg" />
       <div className="max-w-7xl mx-auto relative z-10">
         {/* Header */}
@@ -350,7 +352,7 @@ export default function SecurityAlertDetail() {
                   <h2 className="text-2xl font-bold text-foreground mb-2">
                     Risk Score: {alert.risk_score.toFixed(1)}
                   </h2>
-                  <p className="text-muted-foreground">User: {(alert as any).email}</p>
+                  <p className="text-muted-foreground">User: {(alert as any).name || (alert as any).email || alert.user_id}</p>
                   <p className="text-muted-foreground">
                     {new Date(alert.created_at).toLocaleString()}
                   </p>
@@ -508,15 +510,16 @@ export default function SecurityAlertDetail() {
 
             {/* Chat */}
             <div className="glass-panel p-6">
-              <div className="flex items-center justify-between gap-4">
-                <h3 className="text-xl font-semibold text-foreground">Chat</h3>
-                <div className="text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-4 pb-3 border-b border-border/40">
+                <div className="min-w-0">
+                  <h3 className="text-xl font-semibold text-foreground">Chat</h3>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {chatSecurityEmail ? `Responder: ${chatSecurityEmail}` : 'Responder: (unassigned)'}
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground px-2 py-1 rounded-md border border-border/40 bg-black/30">
                   {chatReadOnly || alert.status === 'resolved' ? 'Read-only' : 'Live'}
                 </div>
-              </div>
-
-              <div className="mt-1 text-sm text-muted-foreground">
-                {chatSecurityEmail ? `Responder: ${chatSecurityEmail}` : 'Responder: (unassigned)'}
               </div>
 
               {chatLoading ? (
@@ -529,18 +532,31 @@ export default function SecurityAlertDetail() {
                 <div className="mt-3 text-sm text-danger">{chatError}</div>
               ) : null}
 
-              <div className="mt-4 rounded-lg border border-border/40 bg-secondary/30 h-[260px] overflow-y-auto p-4 space-y-3">
+              <div className="mt-4 rounded-lg border border-border/50 bg-black/35 h-[260px] overflow-y-auto p-4">
                 {chatMessages.length === 0 ? (
                   <div className="text-muted-foreground text-sm">No messages yet.</div>
                 ) : (
-                  chatMessages.map((m) => (
-                    <div key={m.id} className="rounded-lg bg-secondary/40 border border-border/40 p-3">
-                      <div className="text-xs text-muted-foreground">
-                        {m.sender_email || m.sender_id} • {new Date(m.created_at).toLocaleString()}
-                      </div>
-                      <div className="text-foreground mt-1 whitespace-pre-wrap">{m.message}</div>
-                    </div>
-                  ))
+                  <div className="space-y-3">
+                    {chatMessages.map((m) => {
+                      const isMine = Boolean(user?.id && m.sender_id === user.id);
+                      return (
+                        <div key={m.id} className={isMine ? 'flex justify-end' : 'flex justify-start'}>
+                          <div
+                            className={
+                              isMine
+                                ? 'max-w-[85%] rounded-2xl rounded-tr-sm bg-primary/20 border border-primary/25 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.35)]'
+                                : 'max-w-[85%] rounded-2xl rounded-tl-sm bg-secondary/35 border border-border/50 px-4 py-3'
+                            }
+                          >
+                            <div className="text-xs text-muted-foreground">
+                              {isMine ? 'You' : m.sender_name || m.sender_email || m.sender_id} • {new Date(m.created_at).toLocaleString()}
+                            </div>
+                            <div className="text-foreground mt-1 whitespace-pre-wrap">{m.message}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
@@ -550,7 +566,7 @@ export default function SecurityAlertDetail() {
                   onChange={(e) => setChatDraft(e.target.value)}
                   placeholder={chatReadOnly || alert.status === 'resolved' ? 'Chat is read-only (resolved)' : 'Type a message…'}
                   disabled={chatForbidden || chatLoading || chatReadOnly || alert.status === 'resolved'}
-                  className="flex-1 px-4 py-3 rounded-lg border border-border bg-card/50 text-foreground backdrop-blur-sm focus:outline-none focus:border-primary/50 disabled:opacity-60"
+                  className="flex-1 px-4 py-3 rounded-xl border border-border/60 bg-black/30 text-foreground backdrop-blur-sm focus:outline-none focus:border-primary/60 disabled:opacity-60"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -562,7 +578,7 @@ export default function SecurityAlertDetail() {
                   type="button"
                   onClick={sendChatMessage}
                   disabled={chatForbidden || chatLoading || chatReadOnly || alert.status === 'resolved' || !chatDraft.trim()}
-                  className="px-5 py-3 bg-primary/80 hover:bg-primary text-primary-foreground rounded-lg border border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-5 py-3 bg-primary/80 hover:bg-primary text-primary-foreground rounded-xl border border-primary/30 shadow-[0_0_24px_rgba(37,246,228,0.15)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Send
                 </button>

@@ -1,14 +1,7 @@
 import axios from 'axios';
+import { appEnv } from '../lib/env';
 
-// Use VITE_API_URL from environment variables (must include /api)
-// This MUST be set in frontend/.env - no fallbacks allowed
-const baseURL = (import.meta as any).env?.VITE_API_URL;
-
-if (!baseURL) {
-  console.error('❌ VITE_API_URL is not configured. Please set it in frontend/.env');
-  console.error('⚠️  Example: VITE_API_URL="http://localhost:3001/api"');
-  throw new Error('VITE_API_URL is required. Please configure it in frontend/.env');
-}
+const baseURL = appEnv.apiUrl();
 
 export const api = axios.create({
   baseURL,

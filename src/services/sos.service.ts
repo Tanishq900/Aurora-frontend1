@@ -4,6 +4,7 @@ export interface SOSEvent {
   id: string;
   user_id: string;
   email?: string;
+  name?: string;
   risk_score: number;
   factors: {
     audio: number;
@@ -12,8 +13,8 @@ export interface SOSEvent {
     location: number;
   };
   location?: {
-    lat?: number;
-    lng?: number;
+    lat?: number | string;
+    lng?: number | string;
     address?: string;
   };
   trigger_type: 'manual' | 'ai';
@@ -44,6 +45,7 @@ export interface SOSChatMessage {
   message: string;
   created_at: string;
   sender_email?: string;
+  sender_name?: string;
   sos_id?: string;
 }
 
@@ -55,6 +57,7 @@ export interface SOSChatBundle {
     student_id: string;
     security_id: string | null;
     security_email?: string;
+    security_name?: string;
     created_at: string;
     updated_at: string;
   };

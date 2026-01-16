@@ -147,6 +147,16 @@ body {
   box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.4), 0 0 30px -10px hsl(var(--warning) / 0.35);
 }
 
+.dark-select {
+  color-scheme: dark;
+}
+
+.dark-select,
+.dark-select option {
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
 .aurora-bg {
   position: fixed;
   top: 0;

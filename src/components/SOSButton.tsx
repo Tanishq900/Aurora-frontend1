@@ -22,7 +22,6 @@ export default function SOSButton({
   const [isTriggering, setIsTriggering] = useState(false);
   const [internalTriggerType, setInternalTriggerType] = useState<'manual' | 'ai'>('manual');
   const [audioSensor, setAudioSensor] = useState<AudioSensor | null>(null);
-  const [motionSensor, setMotionSensor] = useState<MotionSensor | null>(null);
   const [audioData, setAudioData] = useState<AudioData>({
     rms: 0,
     pitch: 0,
@@ -40,6 +39,8 @@ export default function SOSButton({
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const isCountdownRunningRef = useRef<boolean>(false);
   const isSOSSentRef = useRef<boolean>(false); // Prevent duplicate SOS submissions
+  const audioSensorRef = useRef<AudioSensor | null>(null);
+  const motionSensorRef = useRef<MotionSensor | null>(null);
 
   const startSOS = (type: 'manual' | 'ai' = 'manual') => {
     isSOSSentRef.current = false; // Reset the sent flag when starting new SOS
@@ -66,11 +67,12 @@ export default function SOSButton({
         const audio = new AudioSensor();
         await audio.initialize();
         setAudioSensor(audio);
+        audioSensorRef.current = audio;
 
         const motion = new MotionSensor();
         if (motion.isSupported()) {
           await motion.initialize();
-          setMotionSensor(motion);
+          motionSensorRef.current = motion;
 
           // Listen to device motion events
           const handleMotion = (event: DeviceMotionEvent) => {
@@ -89,8 +91,8 @@ export default function SOSButton({
     initSensors();
 
     return () => {
-      if (audioSensor) audioSensor.stop();
-      if (motionSensor) motionSensor.stop();
+      if (audioSensorRef.current) audioSensorRef.current.stop();
+      if (motionSensorRef.current) motionSensorRef.current.stop();
     };
   }, []);
 
@@ -229,11 +231,15 @@ export default function SOSButton({
             relative w-32 h-32 rounded-full font-bold text-xl
             transition-all duration-300
             ${isTriggering 
-              ? 'bg-danger hover:bg-red-600 animate-pulse' 
+              ? 'bg-danger hover:bg-red-600 animate-pulse'
               : 'bg-danger hover:bg-red-600'
             }
-            text-white shadow-2xl
-            focus:outline-none focus:ring-4 focus:ring-danger/50
+            text-white
+            border border-danger/50
+            shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_40px_rgba(239,68,68,0.35)]
+            hover:shadow-[0_22px_70px_rgba(0,0,0,0.65),0_0_55px_rgba(239,68,68,0.45)]
+            active:scale-[0.98]
+            focus:outline-none focus:ring-4 focus:ring-danger/40
           `}
         >
           <span>SOS</span>

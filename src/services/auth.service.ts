@@ -3,13 +3,16 @@ import api from './api';
 export interface User {
   id: string;
   email: string;
-  role: 'student' | 'security';
+  name?: string;
+  role: 'student' | 'security' | 'admin';
   is_verified?: boolean;
+  security_approved?: boolean;
 }
 
 export interface RegisterData {
   email: string;
   password: string;
+  name?: string;
   role?: 'student' | 'security';
 }
 

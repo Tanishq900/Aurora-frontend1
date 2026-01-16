@@ -23,7 +23,7 @@ function AnalyticsCard({ title, subtitle, children }: { title: string; subtitle?
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
-      className="rounded-2xl bg-background/55 backdrop-blur border border-border/40 shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
+      className="rounded-2xl bg-black/60 backdrop-blur border border-border/60 shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
     >
       <div className="px-5 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
@@ -42,7 +42,7 @@ function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload || payload.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border/60 bg-background/95 backdrop-blur px-3 py-2 shadow-lg">
+    <div className="rounded-xl border border-border/70 bg-black/90 backdrop-blur px-3 py-2 shadow-[0_12px_36px_rgba(0,0,0,0.55)]">
       <div className="text-sm font-semibold text-foreground">{label}</div>
       <div className="mt-1 space-y-1">
         {payload
@@ -118,14 +118,14 @@ export default function AnalyticsPage() {
   } as const;
 
   return (
-    <div className="min-h-screen aurora-gradient p-6 relative">
+    <div className="min-h-screen bg-black p-6 relative">
       <div className="aurora-bg" />
       <div className="max-w-7xl mx-auto relative z-10">
         {/* Header */}
         <div className="glass-panel border-b border-border/50 px-6 py-4 flex justify-between items-center mb-8">
           <div>
             <h1 className="text-2xl font-bold aurora-text">Analytics Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Weekly alert statistics{user?.email ? ` • ${user.email}` : ''}</p>
+            <p className="text-sm text-muted-foreground">Weekly alert statistics{(user?.name || user?.email) ? ` • ${user?.name || user?.email}` : ''}</p>
           </div>
           <div className="flex gap-4">
             <Link
@@ -145,15 +145,15 @@ export default function AnalyticsPage() {
 
         {/* KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
-          <div className="rounded-2xl bg-background/55 backdrop-blur border border-border/40 px-5 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
+          <div className="rounded-2xl bg-black/60 backdrop-blur border border-border/60 px-5 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
             <h3 className="text-muted-foreground text-xs sm:text-sm">Total SOS This Week</h3>
             <p className="mt-2 text-3xl sm:text-4xl font-semibold text-foreground tabular-nums">{data.kpis.totalSOS}</p>
           </div>
-          <div className="rounded-2xl bg-background/55 backdrop-blur border border-border/40 px-5 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
+          <div className="rounded-2xl bg-black/60 backdrop-blur border border-border/60 px-5 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
             <h3 className="text-muted-foreground text-xs sm:text-sm">Peak Day</h3>
             <p className="mt-2 text-3xl sm:text-4xl font-semibold text-foreground truncate">{data.kpis.peakDay}</p>
           </div>
-          <div className="rounded-2xl bg-background/55 backdrop-blur border border-border/40 px-5 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
+          <div className="rounded-2xl bg-black/60 backdrop-blur border border-border/60 px-5 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
             <h3 className="text-muted-foreground text-xs sm:text-sm">Highest AI Risk Count</h3>
             <p className="mt-2 text-3xl sm:text-4xl font-semibold text-foreground tabular-nums">{data.kpis.highestAIRisk}</p>
           </div>
@@ -178,7 +178,14 @@ export default function AnalyticsPage() {
                   width={34}
                 />
                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(135, 235, 173, 0.08)' }} wrapperStyle={{ outline: 'none' }} />
-                <Bar dataKey="sos" name="SOS" fill={colors.sos} radius={4} barSize={24} />
+                <Bar
+                  dataKey="sos"
+                  name="SOS"
+                  fill={colors.sos}
+                  radius={4}
+                  barSize={24}
+                  style={{ filter: 'drop-shadow(0px 0px 10px rgba(239,68,68,0.35))' }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </AnalyticsCard>
@@ -208,6 +215,7 @@ export default function AnalyticsPage() {
                   strokeWidth={2.25}
                   dot={false}
                   activeDot={{ r: 4, fill: colors.ai, stroke: 'hsl(var(--background))', strokeWidth: 2 }}
+                  style={{ filter: 'drop-shadow(0px 0px 10px rgba(37,246,228,0.35))' }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -236,7 +244,15 @@ export default function AnalyticsPage() {
                 iconType="square"
                 wrapperStyle={{ paddingBottom: 8, color: 'hsl(var(--muted-foreground))', fontSize: 12 }}
               />
-              <Bar yAxisId="left" dataKey="sos" name="SOS" fill={colors.sos} radius={4} barSize={20} />
+              <Bar
+                yAxisId="left"
+                dataKey="sos"
+                name="SOS"
+                fill={colors.sos}
+                radius={4}
+                barSize={20}
+                style={{ filter: 'drop-shadow(0px 0px 10px rgba(239,68,68,0.35))' }}
+              />
               <Line
                 yAxisId="right"
                 type="monotone"
@@ -246,6 +262,7 @@ export default function AnalyticsPage() {
                 strokeWidth={2.25}
                 dot={false}
                 activeDot={{ r: 4, fill: colors.ai, stroke: 'hsl(var(--background))', strokeWidth: 2 }}
+                style={{ filter: 'drop-shadow(0px 0px 10px rgba(37,246,228,0.35))' }}
               />
             </ComposedChart>
           </ResponsiveContainer>

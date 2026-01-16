@@ -1,6 +1,9 @@
 import { io, Socket } from 'socket.io-client';
 
-const WS_URL = (import.meta as any).env?.VITE_WS_URL || 'http://localhost:3001';
+import { appEnv } from '../lib/env';
+import { logger } from '../lib/logger';
+
+const WS_URL = appEnv.wsUrl();
 
 let socket: Socket | null = null;
 
@@ -20,7 +23,7 @@ export function connectSocket(token: string): Socket {
   }
 
   if (!token) {
-    console.error('WebSocket: No token provided, cannot connect');
+    logger.error('WebSocket: No token provided, cannot connect');
     throw new Error('Token required for WebSocket connection');
   }
 
@@ -35,7 +38,7 @@ export function connectSocket(token: string): Socket {
   });
 
   socket.on('connect_error', (error) => {
-    console.error('❌ WebSocket connection error:', error.message);
+    logger.warn('WebSocket connection error:', error.message);
   });
 
   return socket;

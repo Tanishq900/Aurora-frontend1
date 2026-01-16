@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { riskZonesService, RiskZone } from '../services/risk-zones.service';
+import { appEnv } from '../lib/env';
+import { logger } from '../lib/logger';
 
 interface AuroraMapProps {
   userLocation?: { lat: number; lng: number } | null;
@@ -45,9 +47,8 @@ export default function AuroraMap({
       return;
     }
 
-    const mapboxToken = ((import.meta as any).env?.VITE_MAPBOX_TOKEN as string | undefined);
+    const mapboxToken = appEnv.mapboxToken();
     if (!mapboxToken) {
-      console.error('❌ VITE_MAPBOX_TOKEN is not configured. Please set it in frontend/.env');
       setTokenMissing(true);
       return;
     }
@@ -100,7 +101,7 @@ export default function AuroraMap({
           }
         },
         (error) => {
-          console.warn('Geolocation error:', error);
+          logger.warn('Geolocation error:', error);
         }
       );
 
@@ -111,16 +112,29 @@ export default function AuroraMap({
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           };
-          if (map.current && userMarkerRef.current) {
+          if (!map.current) return;
+
+          if (!userMarkerRef.current) {
+            const el = document.createElement('div');
+            el.className = 'user-marker';
+            el.style.width = '20px';
+            el.style.height = '20px';
+            el.style.borderRadius = '50%';
+            el.style.backgroundColor = '#4F46E5';
+            el.style.border = '3px solid white';
+            el.style.boxShadow = '0 0 10px rgba(79, 70, 229, 0.5)';
+            userMarkerRef.current = new mapboxgl.Marker(el).setLngLat([loc.lng, loc.lat]).addTo(map.current);
+          } else {
             userMarkerRef.current.setLngLat([loc.lng, loc.lat]);
-            map.current.setCenter([loc.lng, loc.lat]);
-            if (onLocationUpdate) {
-              onLocationUpdate(loc);
-            }
+          }
+
+          map.current.setCenter([loc.lng, loc.lat]);
+          if (onLocationUpdate) {
+            onLocationUpdate(loc);
           }
         },
         (error) => {
-          console.warn('Geolocation watch error:', error);
+          logger.warn('Geolocation watch error:', error);
         }
       );
     }
@@ -136,7 +150,7 @@ export default function AuroraMap({
         isInitializedRef.current = false;
       }
     };
-  }, []);
+  }, [enableGeolocation, onLocationUpdate, sosMarkers, userLocation]);
 
   // Load risk zones
   useEffect(() => {
@@ -146,7 +160,7 @@ export default function AuroraMap({
         setRiskZones(zones);
       })
       .catch((error) => {
-        console.error('Failed to load risk zones:', error);
+        logger.error('Failed to load risk zones:', error);
       });
   }, []);
 
@@ -331,7 +345,7 @@ export default function AuroraMap({
     <div className="relative w-full rounded-lg overflow-hidden" style={{ height }}>
       {tokenMissing || initError ? (
         <div className="w-full h-full flex items-center justify-center bg-slate-700 text-slate-200 text-sm px-4 text-center">
-          {tokenMissing ? 'Map is not configured. Set VITE_MAPBOX_TOKEN.' : initError}
+          {tokenMissing ? 'Map is not configured. Set MAPBOX_TOKEN.' : initError}
         </div>
       ) : (
         <div ref={mapContainer} className="w-full h-full" />

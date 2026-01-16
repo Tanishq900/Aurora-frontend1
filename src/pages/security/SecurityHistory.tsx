@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../state/auth.store';
 import { sosService, SOSEvent } from '../../services/sos.service';
@@ -14,16 +14,7 @@ export default function SecurityHistory() {
   });
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (user?.role !== 'security') {
-      navigate('/dashboard');
-      return;
-    }
-
-    loadHistory();
-  }, [filters, user, navigate]);
-
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     try {
       setIsLoading(true);
       const data = await sosService.getSOSEvents({
@@ -36,7 +27,16 @@ export default function SecurityHistory() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filters.limit, filters.status]);
+
+  useEffect(() => {
+    if (user?.role !== 'security') {
+      navigate('/dashboard');
+      return;
+    }
+
+    loadHistory();
+  }, [loadHistory, navigate, user?.role]);
 
   const handleClearHistory = async () => {
     if (!window.confirm('Are you sure you want to clear all SOS history? This action cannot be undone.')) {
@@ -59,7 +59,7 @@ export default function SecurityHistory() {
   };
 
   return (
-    <div className="min-h-screen aurora-gradient p-6 relative">
+    <div className="min-h-screen bg-black p-6 relative">
       <div className="aurora-bg" />
       <div className="max-w-7xl mx-auto relative z-10">
         {/* Header */}

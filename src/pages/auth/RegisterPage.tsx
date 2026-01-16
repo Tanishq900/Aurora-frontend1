@@ -8,8 +8,12 @@ import GlassCard from '../../ui/aurora/GlassCard';
 import AuroraInput from '../../ui/aurora/AuroraInput';
 import AuroraButton from '../../ui/aurora/AuroraButton';
 import AuroraSentinelLogo from '../../ui/aurora/AuroraSentinelLogo';
+import AuroraSelect from '../../ui/aurora/AuroraSelect';
+import { appEnv } from '../../lib/env';
+import { logger } from '../../lib/logger';
 
 export default function RegisterPage() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -40,9 +44,10 @@ export default function RegisterPage() {
         email,
         password,
         options: {
-          emailRedirectTo: "http://localhost:3000/verify-complete",
+          emailRedirectTo: `${appEnv.siteUrl()}/verify-complete`,
           data: {
             role: role, // Store role in user metadata
+            name,
           },
         },
       });
@@ -50,7 +55,7 @@ export default function RegisterPage() {
       if (signUpError) {
         // Provide more helpful error messages
         if (signUpError.message.includes('fetch')) {
-          setError('Unable to connect to Supabase. Please check your VITE_SUPABASE_URL in frontend/.env file.');
+          setError('Unable to connect to Supabase. Please check your frontend environment variables.');
         } else {
           setError(signUpError.message || 'Registration failed');
         }
@@ -62,10 +67,10 @@ export default function RegisterPage() {
         
         // After successful Supabase signup, create local user in backend
         try {
-          await authService.createLocalUser({ email, password, role });
+          await authService.createLocalUser({ email, password, role, name });
         } catch (localUserError: any) {
           // Don't block signup if local user creation fails
-          console.warn('Failed to create local user (non-blocking):', localUserError);
+          logger.warn('Failed to create local user (non-blocking):', localUserError);
           // User can still verify email and we'll handle it on first login if needed
         }
       }
@@ -106,6 +111,15 @@ export default function RegisterPage() {
             )}
 
             <AuroraInput
+              label="Name"
+              type="text"
+              placeholder="Enter your name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+
+            <AuroraInput
               label="Email Address"
               type="email"
               placeholder="Enter your email"
@@ -118,15 +132,16 @@ export default function RegisterPage() {
               <label htmlFor="role" className="block text-sm font-medium text-muted-foreground mb-2">
                 Role
               </label>
-              <select
-                id="role"
+              <AuroraSelect
                 value={role}
-                onChange={(e) => setRole(e.target.value as 'student' | 'security')}
-                className="w-full px-4 py-3 rounded-lg border border-border bg-card/50 text-foreground backdrop-blur-sm focus:outline-none focus:border-primary/50"
-              >
-                <option value="student">Student</option>
-                <option value="security">Security</option>
-              </select>
+                onChange={(v) => setRole(v as 'student' | 'security')}
+                options={[
+                  { value: 'student', label: 'Student' },
+                  { value: 'security', label: 'Security' },
+                ]}
+                className="w-full"
+                buttonClassName="w-full px-4 py-3 bg-card/50 border border-border rounded-lg backdrop-blur-sm hover:bg-card/60 focus:ring-primary/50"
+              />
             </div>
 
             <AuroraInput

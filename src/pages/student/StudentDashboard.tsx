@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../state/auth.store';
 import { usePresentationStore } from '../../state/presentation.store';
@@ -12,6 +12,7 @@ import AuroraMap from '../../components/AuroraMap';
 import EventTimeline from '../../components/EventTimeline';
 import { generateExplanation } from '../../risk/explain';
 import { riskZonesService, RiskZone } from '../../services/risk-zones.service';
+import { appEnv } from '../../lib/env';
 import { supabase } from '../../lib/supabaseClient';
 import SOSConfirmationModal from '../../components/SOSConfirmationModal';
 
@@ -63,6 +64,7 @@ export default function StudentDashboard() {
   const mediaCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMediaCountdownRunningRef = useRef<boolean>(false);
   const isMediaSOSSentRef = useRef<boolean>(false);
+  const uploadAndSendMediaSOSRef = useRef<() => void>(() => {});
   const latestAudioRef = useRef<AudioData>(audioData);
   const latestMotionRef = useRef<MotionData>(motionData);
   const latestRiskTotalRef = useRef<number>(riskSnapshot.total);
@@ -295,7 +297,7 @@ export default function StudentDashboard() {
     setMediaError(null);
 
     try {
-      const envBucket = (import.meta as any).env?.VITE_SUPABASE_STORAGE_BUCKET as string | undefined;
+      const envBucket = appEnv.supabaseStorageBucket();
       const bucketCandidates = Array.from(
         new Set([
           envBucket,
@@ -342,7 +344,7 @@ export default function StudentDashboard() {
           const msg = (upload.error as any)?.message || '';
           if (/bucket.*not.*found/i.test(msg)) {
             throw new Error(
-              `Supabase Storage bucket not found. Tried: ${bucketCandidates.map((b) => `"${b}"`).join(', ')}. Set VITE_SUPABASE_STORAGE_BUCKET to your existing bucket name (e.g. "sos-attachment"), then restart the frontend dev server.`
+              `Supabase Storage bucket not found. Tried: ${bucketCandidates.map((b) => `"${b}"`).join(', ')}. Set SUPABASE_STORAGE_BUCKET (VITE_SUPABASE_STORAGE_BUCKET or NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET) to your existing bucket name (e.g. "sos-attachment"), then restart the frontend dev server.`
             );
           }
           throw new Error(upload.error.message || 'Upload failed');
@@ -388,6 +390,8 @@ export default function StudentDashboard() {
     }
   };
 
+  uploadAndSendMediaSOSRef.current = uploadAndSendMediaSOS;
+
   const startMediaSOSCountdown = () => {
     if (!user?.id) {
       setMediaError('You must be logged in to send media.');
@@ -431,7 +435,7 @@ export default function StudentDashboard() {
       }
       isMediaCountdownRunningRef.current = false;
       setMediaCountdown(null);
-      uploadAndSendMediaSOS();
+      uploadAndSendMediaSOSRef.current();
       return;
     }
 
@@ -467,6 +471,15 @@ export default function StudentDashboard() {
     }
   }, [user, navigate]);
 
+  const loadSOSHistory = useCallback(async () => {
+    try {
+      const events = await sosService.getSOSEvents({ limit: 7 });
+      setSosEvents(events);
+    } catch (error) {
+      console.error('Failed to load SOS history:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchStatus();
     loadSOSHistory();
@@ -481,7 +494,7 @@ export default function StudentDashboard() {
       const socket = getSocket();
       if (socket) socket.disconnect();
     };
-  }, []);
+  }, [fetchStatus, loadSOSHistory]);
 
   useEffect(() => {
     riskZonesService
@@ -620,7 +633,7 @@ export default function StudentDashboard() {
       if (event.status === 'acknowledged' && !chatSecurityEmail) {
         try {
           const bundle = await sosService.getSOSChatById(chatSosId);
-          setChatSecurityEmail(bundle?.chat?.security_email);
+          setChatSecurityEmail(bundle?.chat?.security_name || bundle?.chat?.security_email);
         } catch {
           // ignore
         }
@@ -752,15 +765,6 @@ export default function StudentDashboard() {
     }
   }, [riskSnapshot, presentationMode, autoSOSTriggered, lastAutoSOSTime]);
 
-  const loadSOSHistory = async () => {
-    try {
-      const events = await sosService.getSOSEvents({ limit: 7 });
-      setSosEvents(events);
-    } catch (error) {
-      console.error('Failed to load SOS history:', error);
-    }
-  };
-
   const openChat = async () => {
     setChatOpen(true);
     setChatLoading(true);
@@ -776,7 +780,7 @@ export default function StudentDashboard() {
       setChatSosId(sosId || null);
       setChatMessages(Array.isArray((bundle as any)?.messages) ? ((bundle as any).messages as SOSChatMessage[]) : []);
       setChatReadOnly(Boolean((bundle as any)?.read_only));
-      setChatSecurityEmail((bundle as any)?.chat?.security_email);
+      setChatSecurityEmail((bundle as any)?.chat?.security_name || (bundle as any)?.chat?.security_email);
     } catch (e: any) {
       const msg = e?.response?.data?.error || e?.message || 'Failed to load chat';
       setChatError(msg);
@@ -837,13 +841,14 @@ export default function StudentDashboard() {
   ];
 
   return (
-    <div className="min-h-screen aurora-gradient p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-black p-6 relative">
+      <div className="aurora-bg" />
+      <div className="max-w-7xl mx-auto space-y-6 relative z-10">
         {/* Header */}
-        <div className="glass-panel px-6 py-4 flex justify-between items-center">
+        <div className="glass-panel px-6 py-4 flex justify-between items-center border border-border/60">
           <div>
             <h1 className="text-2xl font-bold aurora-text">Student Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Welcome, {user?.email}</p>
+            <p className="text-sm text-muted-foreground">Welcome, {user?.name || user?.email}</p>
           </div>
           <div className="flex gap-4">
             <button
@@ -863,8 +868,10 @@ export default function StudentDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* SOS Button Section */}
-          <div className="lg:col-span-1 glass-panel-critical p-6 flex flex-col items-center justify-center">
-            <h2 className="text-xl font-semibold text-foreground mb-4 text-center w-full">Emergency SOS</h2>
+          <div className="lg:col-span-1 glass-panel-critical p-6 flex flex-col items-center justify-center border border-destructive/40">
+            <div className="w-full pb-3 mb-4 border-b border-destructive/30">
+              <h2 className="text-xl font-semibold text-foreground text-center">Emergency SOS</h2>
+            </div>
             <SOSButton 
               location={userLocation}
               onSOSTriggered={() => {
@@ -888,8 +895,10 @@ export default function StudentDashboard() {
           </div>
 
           {/* Risk Display */}
-          <div className="lg:col-span-2 glass-panel p-6">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Live Risk Assessment</h2>
+          <div className="lg:col-span-2 glass-panel p-6 border border-border/60">
+            <div className="flex items-center justify-between gap-4 pb-3 mb-4 border-b border-border/40">
+              <h2 className="text-xl font-semibold text-foreground">Live Risk Assessment</h2>
+            </div>
             <div className="space-y-4">
               {riskData.map((item) => (
                 <div key={item.name}>
@@ -902,11 +911,14 @@ export default function StudentDashboard() {
                       {item.value.toFixed(1)} / {item.max}
                     </span>
                   </div>
-                  <div className="w-full bg-secondary/60 rounded-full h-3">
+                  <div className="w-full bg-secondary/60 rounded-full h-3 overflow-hidden border border-border/50">
                     <div
                       className={`h-3 rounded-full transition-all duration-300 ${
-                        item.color === 'danger' ? 'bg-danger' :
-                        item.color === 'warning' ? 'bg-warning' : 'bg-safe'
+                        item.color === 'danger'
+                          ? 'bg-danger shadow-[inset_0_0_14px_rgba(239,68,68,0.65)]'
+                          : item.color === 'warning'
+                            ? 'bg-warning shadow-[inset_0_0_14px_rgba(245,158,11,0.6)]'
+                            : 'bg-safe shadow-[inset_0_0_14px_rgba(34,197,94,0.6)]'
                       }`}
                       style={{ width: `${(item.value / item.max) * 100}%` }}
                     />
@@ -929,10 +941,12 @@ export default function StudentDashboard() {
         </div>
 
         {/* Map and Timeline Section */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* Map */}
-          <div className="glass-panel p-6">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Live Location & Risk Zones</h2>
+          <div className="glass-panel p-6 border border-border/60">
+            <div className="flex items-center justify-between gap-4 pb-3 mb-4 border-b border-border/40">
+              <h2 className="text-xl font-semibold text-foreground">Live Location & Risk Zones</h2>
+            </div>
             <AuroraMap
               userLocation={userLocation}
               height="400px"
@@ -941,8 +955,8 @@ export default function StudentDashboard() {
           </div>
 
           {/* Timeline */}
-          <div className="glass-panel p-6">
-            <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="glass-panel p-6 border border-border/60">
+            <div className="flex items-center justify-between gap-4 pb-3 mb-4 border-b border-border/40">
               <h2 className="text-xl font-semibold text-foreground">Event Timeline</h2>
               <button
                 type="button"
@@ -963,8 +977,10 @@ export default function StudentDashboard() {
 
         {/* AI Explanation */}
         {explanation.length > 0 && (
-          <div className="mt-6 glass-panel p-6">
-            <h2 className="text-xl font-semibold text-foreground mb-4">AI Risk Explanation</h2>
+          <div className="mt-6 glass-panel p-6 border border-border/60">
+            <div className="flex items-center justify-between gap-4 pb-3 mb-4 border-b border-border/40">
+              <h2 className="text-xl font-semibold text-foreground">AI Risk Explanation</h2>
+            </div>
             <div className="space-y-2">
               {explanation.map((bullet, index) => (
                 <div
@@ -981,8 +997,10 @@ export default function StudentDashboard() {
         )}
 
         {/* SOS History */}
-        <div className="mt-6 glass-panel p-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Last 7 Days History</h2>
+        <div className="mt-6 glass-panel p-6 border border-border/60">
+          <div className="flex items-center justify-between gap-4 pb-3 mb-4 border-b border-border/40">
+            <h2 className="text-xl font-semibold text-foreground">Last 7 Days History</h2>
+          </div>
           {sosEvents.length === 0 ? (
             <p className="text-muted-foreground">No SOS events in the last 7 days</p>
           ) : (
@@ -1212,20 +1230,25 @@ export default function StudentDashboard() {
       {chatOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="glass-panel p-6 max-w-2xl w-full mx-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
+            <div className="flex items-start justify-between gap-4 pb-3 border-b border-border/40">
+              <div className="min-w-0">
                 <h3 className="text-xl font-semibold text-foreground">SOS Chat</h3>
                 <p className="text-sm text-muted-foreground mt-1">
                   {chatSecurityEmail ? `Connected to: ${chatSecurityEmail}` : 'Waiting for Security to acknowledge…'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={closeChat}
-                className="px-3 py-2 bg-secondary/60 hover:bg-secondary/80 text-foreground rounded-lg border border-border/50"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="text-xs text-muted-foreground px-2 py-1 rounded-md border border-border/40 bg-black/30">
+                  {chatReadOnly ? 'Read-only' : 'Live'}
+                </div>
+                <button
+                  type="button"
+                  onClick={closeChat}
+                  className="px-3 py-2 bg-secondary/60 hover:bg-secondary/80 text-foreground rounded-lg border border-border/50"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             {chatLoading ? (
@@ -1234,18 +1257,31 @@ export default function StudentDashboard() {
               <div className="mt-4 text-sm text-danger">{chatError}</div>
             ) : null}
 
-            <div className="mt-4 rounded-lg border border-border/40 bg-secondary/30 h-[360px] overflow-y-auto p-4 space-y-3">
+            <div className="mt-4 rounded-lg border border-border/50 bg-black/35 h-[360px] overflow-y-auto p-4">
               {chatMessages.length === 0 ? (
                 <div className="text-muted-foreground text-sm">No messages yet.</div>
               ) : (
-                chatMessages.map((m) => (
-                  <div key={m.id} className="rounded-lg bg-secondary/40 border border-border/40 p-3">
-                    <div className="text-xs text-muted-foreground">
-                      {m.sender_email || m.sender_id} • {new Date(m.created_at).toLocaleString()}
-                    </div>
-                    <div className="text-foreground mt-1 whitespace-pre-wrap">{m.message}</div>
-                  </div>
-                ))
+                <div className="space-y-3">
+                  {chatMessages.map((m) => {
+                    const isMine = Boolean(user?.id && m.sender_id === user.id);
+                    return (
+                      <div key={m.id} className={isMine ? 'flex justify-end' : 'flex justify-start'}>
+                        <div
+                          className={
+                            isMine
+                              ? 'max-w-[85%] rounded-2xl rounded-tr-sm bg-primary/20 border border-primary/25 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.35)]'
+                              : 'max-w-[85%] rounded-2xl rounded-tl-sm bg-secondary/35 border border-border/50 px-4 py-3'
+                          }
+                        >
+                          <div className="text-xs text-muted-foreground">
+                            {isMine ? 'You' : m.sender_name || m.sender_email || m.sender_id} • {new Date(m.created_at).toLocaleString()}
+                          </div>
+                          <div className="text-foreground mt-1 whitespace-pre-wrap">{m.message}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
@@ -1255,7 +1291,7 @@ export default function StudentDashboard() {
                 onChange={(e) => setChatDraft(e.target.value)}
                 placeholder={chatReadOnly ? 'Chat is read-only (resolved)' : 'Type a message…'}
                 disabled={chatReadOnly || chatLoading || !chatSosId}
-                className="flex-1 px-4 py-3 rounded-lg border border-border bg-card/50 text-foreground backdrop-blur-sm focus:outline-none focus:border-primary/50 disabled:opacity-60"
+                className="flex-1 px-4 py-3 rounded-xl border border-border/60 bg-black/30 text-foreground backdrop-blur-sm focus:outline-none focus:border-primary/60 disabled:opacity-60"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -1267,7 +1303,7 @@ export default function StudentDashboard() {
                 type="button"
                 onClick={sendChatMessage}
                 disabled={chatReadOnly || chatLoading || !chatSosId || !chatDraft.trim()}
-                className="px-5 py-3 bg-primary/80 hover:bg-primary text-primary-foreground rounded-lg border border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-3 bg-primary/80 hover:bg-primary text-primary-foreground rounded-xl border border-primary/30 shadow-[0_0_24px_rgba(37,246,228,0.15)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Send
               </button>
