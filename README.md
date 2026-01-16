@@ -37,3 +37,4 @@ npm run dev
 - Zustand (state management)
 - Socket.io Client
 - Recharts (visualizations)
+"# aurorafrontend-sentinel" 
