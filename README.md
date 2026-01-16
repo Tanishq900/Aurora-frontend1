@@ -38,3 +38,4 @@ npm run dev
 - Socket.io Client
 - Recharts (visualizations)
 "# aurorafrontend-sentinel" 
+"# aurorafrontend-sentinel" 
