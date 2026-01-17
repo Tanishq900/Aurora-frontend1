@@ -27,6 +27,8 @@ export default function AuroraMap({
 }: AuroraMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const onLocationUpdateRef = useRef<typeof onLocationUpdate>(onLocationUpdate);
+  const enableGeolocationRef = useRef(enableGeolocation);
   const [riskZones, setRiskZones] = useState<RiskZone[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [tokenMissing, setTokenMissing] = useState(false);
@@ -37,6 +39,14 @@ export default function AuroraMap({
   const isInitializedRef = useRef(false);
   const riskZoneIdsRef = useRef<string[]>([]);
   const hasAutoFitRef = useRef(false);
+
+  useEffect(() => {
+    onLocationUpdateRef.current = onLocationUpdate;
+  }, [onLocationUpdate]);
+
+  useEffect(() => {
+    enableGeolocationRef.current = enableGeolocation;
+  }, [enableGeolocation]);
 
   // Initialize map
   useEffect(() => {
@@ -54,6 +64,9 @@ export default function AuroraMap({
     }
 
     isInitializedRef.current = true;
+    setMapLoaded(false);
+    setTokenMissing(false);
+    setInitError(null);
     mapboxgl.accessToken = mapboxToken;
 
     const firstSos = sosMarkers.find((m) => Number.isFinite(m.lat) && Number.isFinite(m.lng));
@@ -86,7 +99,7 @@ export default function AuroraMap({
     }
 
     // Get user's current location if not provided
-    if (enableGeolocation && !userLocation && navigator.geolocation) {
+    if (enableGeolocationRef.current && !userLocation && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const loc = {
@@ -95,9 +108,7 @@ export default function AuroraMap({
           };
           if (map.current) {
             map.current.setCenter([loc.lng, loc.lat]);
-            if (onLocationUpdate) {
-              onLocationUpdate(loc);
-            }
+            onLocationUpdateRef.current?.(loc);
           }
         },
         (error) => {
@@ -129,9 +140,7 @@ export default function AuroraMap({
           }
 
           map.current.setCenter([loc.lng, loc.lat]);
-          if (onLocationUpdate) {
-            onLocationUpdate(loc);
-          }
+          onLocationUpdateRef.current?.(loc);
         },
         (error) => {
           logger.warn('Geolocation watch error:', error);
@@ -148,9 +157,10 @@ export default function AuroraMap({
         map.current.remove();
         map.current = null;
         isInitializedRef.current = false;
+        setMapLoaded(false);
       }
     };
-  }, [enableGeolocation, onLocationUpdate, sosMarkers, userLocation]);
+  }, []);
 
   // Load risk zones
   useEffect(() => {
@@ -170,6 +180,16 @@ export default function AuroraMap({
 
     const mapInstance = map.current;
     if (!mapInstance) return;
+
+    if (!mapInstance.isStyleLoaded()) {
+      const handleStyleLoad = () => {
+        setMapLoaded(true);
+      };
+      mapInstance.once('style.load', handleStyleLoad);
+      return () => {
+        mapInstance.off('style.load', handleStyleLoad);
+      };
+    }
 
     const existingIds = riskZoneIdsRef.current;
     const currentIds = riskZones.map((z) => z.id);
@@ -199,63 +219,76 @@ export default function AuroraMap({
       const outlineLayerId = `${layerId}-outline`;
 
       // Add source
-      if (!mapInstance?.getSource(sourceId)) {
-        mapInstance?.addSource(sourceId, {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            geometry: zone.polygon,
-            properties: {
-              name: zone.name,
-              type: zone.type,
-            },
-          },
-        });
-      } else {
-        try {
-          (mapInstance.getSource(sourceId) as any)?.setData({
-            type: 'Feature',
-            geometry: zone.polygon,
-            properties: {
-              name: zone.name,
-              type: zone.type,
+      try {
+        if (!mapInstance?.getSource(sourceId)) {
+          mapInstance?.addSource(sourceId, {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              geometry: zone.polygon,
+              properties: {
+                name: zone.name,
+                type: zone.type,
+              },
             },
           });
-        } catch (error) {
-          // Ignore if source type does not support setData
+        } else {
+          try {
+            (mapInstance.getSource(sourceId) as any)?.setData({
+              type: 'Feature',
+              geometry: zone.polygon,
+              properties: {
+                name: zone.name,
+                type: zone.type,
+              },
+            });
+          } catch (error) {
+          }
         }
+      } catch (error: any) {
+        logger.warn('Failed to add/update risk zone source:', error);
+        return;
       }
 
       // Add layer
-      if (!mapInstance?.getLayer(layerId)) {
-        mapInstance?.addLayer({
-          id: layerId,
-          type: 'fill',
-          source: sourceId,
-          paint: {
-            'fill-color': zone.type === 'high' ? '#ef4444' : '#10b981', // red for high, green for low
-            'fill-opacity': zone.type === 'high' ? 0.4 : 0.3,
-          },
-        });
-      } else {
-        mapInstance.setPaintProperty(layerId, 'fill-color', zone.type === 'high' ? '#ef4444' : '#10b981');
-        mapInstance.setPaintProperty(layerId, 'fill-opacity', zone.type === 'high' ? 0.4 : 0.3);
+      try {
+        if (!mapInstance?.getLayer(layerId)) {
+          mapInstance?.addLayer({
+            id: layerId,
+            type: 'fill',
+            source: sourceId,
+            paint: {
+              'fill-color': zone.type === 'high' ? '#ef4444' : '#10b981',
+              'fill-opacity': zone.type === 'high' ? 0.4 : 0.3,
+            },
+          });
+        } else {
+          mapInstance.setPaintProperty(layerId, 'fill-color', zone.type === 'high' ? '#ef4444' : '#10b981');
+          mapInstance.setPaintProperty(layerId, 'fill-opacity', zone.type === 'high' ? 0.4 : 0.3);
+        }
+      } catch (error: any) {
+        logger.warn('Failed to add/update risk zone layer:', error);
+        return;
       }
 
       // Add outline
-      if (!mapInstance?.getLayer(outlineLayerId)) {
-        mapInstance?.addLayer({
-          id: outlineLayerId,
-          type: 'line',
-          source: sourceId,
-          paint: {
-            'line-color': zone.type === 'high' ? '#dc2626' : '#059669',
-            'line-width': 2,
-          },
-        });
-      } else {
-        mapInstance.setPaintProperty(outlineLayerId, 'line-color', zone.type === 'high' ? '#dc2626' : '#059669');
-        mapInstance.setPaintProperty(outlineLayerId, 'line-width', 2);
+      try {
+        if (!mapInstance?.getLayer(outlineLayerId)) {
+          mapInstance?.addLayer({
+            id: outlineLayerId,
+            type: 'line',
+            source: sourceId,
+            paint: {
+              'line-color': zone.type === 'high' ? '#dc2626' : '#059669',
+              'line-width': 2,
+            },
+          });
+        } else {
+          mapInstance.setPaintProperty(outlineLayerId, 'line-color', zone.type === 'high' ? '#dc2626' : '#059669');
+          mapInstance.setPaintProperty(outlineLayerId, 'line-width', 2);
+        }
+      } catch (error: any) {
+        logger.warn('Failed to add/update risk zone outline layer:', error);
       }
     });
 
