@@ -66,6 +66,13 @@ export interface SOSChatBundle {
 }
 
 export const sosService = {
+  async uploadAttachments(files: File[]): Promise<{ paths: string[]; bucket?: string }> {
+    const form = new FormData();
+    files.forEach((f) => form.append('files', f));
+    const response = await api.post('/sos/attachments', form);
+    return response.data;
+  },
+
   async createSOS(data: CreateSOSData): Promise<SOSEvent> {
     const response = await api.post('/sos', data);
     return response.data;

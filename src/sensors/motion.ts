@@ -32,7 +32,8 @@ export class MotionSensor {
   }
 
   handleMotionEvent(event: DeviceMotionEvent): MotionData {
-    if (!this.isActive || !event.acceleration) {
+    const accel = event.acceleration || (event as any).accelerationIncludingGravity;
+    if (!this.isActive || !accel) {
       return {
         acceleration: 0,
         accelerationMagnitude: 0,
@@ -42,9 +43,9 @@ export class MotionSensor {
       };
     }
 
-    const x = event.acceleration.x ?? 0;
-    const y = event.acceleration.y ?? 0;
-    const z = event.acceleration.z ?? 0;
+    const x = accel.x ?? 0;
+    const y = accel.y ?? 0;
+    const z = accel.z ?? 0;
     const magnitude = Math.sqrt(x * x + y * y + z * z);
 
     // Calculate jitter (variance in acceleration)

@@ -12,8 +12,6 @@ import AuroraMap from '../../components/AuroraMap';
 import EventTimeline from '../../components/EventTimeline';
 import { generateExplanation } from '../../risk/explain';
 import { riskZonesService, RiskZone } from '../../services/risk-zones.service';
-import { appEnv } from '../../lib/env';
-import { supabase } from '../../lib/supabaseClient';
 import SOSConfirmationModal from '../../components/SOSConfirmationModal';
 
 export default function StudentDashboard() {
@@ -276,8 +274,6 @@ export default function StudentDashboard() {
     }
   };
 
-  const sanitizeFilename = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
-
   const uploadAndSendMediaSOS = async () => {
     if (!user?.id) {
       setMediaError('You must be logged in to send media.');
@@ -297,60 +293,10 @@ export default function StudentDashboard() {
     setMediaError(null);
 
     try {
-      const envBucket = appEnv.supabaseStorageBucket();
-      const bucketCandidates = Array.from(
-        new Set([
-          envBucket,
-          'sos-attachment',
-          'sos-attachments',
-        ].filter(Boolean))
-      ) as string[];
-
-      const preferredBucket = bucketCandidates[0] || 'sos-attachment';
-      const uploadedPaths: string[] = [];
-
-      for (const file of mediaFiles) {
-        const safeName = sanitizeFilename(file.name || 'upload');
-        const basePath = `${user.id}/${Date.now()}_${safeName}`;
-
-        let usedBucket = preferredBucket;
-        let pathToUse = basePath;
-
-        const tryUpload = async (bucketName: string) =>
-          supabase.storage.from(bucketName).upload(pathToUse, file, {
-            contentType: file.type || undefined,
-            upsert: false,
-          });
-
-        let upload = await tryUpload(usedBucket);
-
-        if (upload.error) {
-          const msg = (upload.error as any)?.message || '';
-          if (/bucket.*not.*found/i.test(msg)) {
-            const nextBucket = bucketCandidates.find((b) => b !== usedBucket);
-            if (nextBucket) {
-              usedBucket = nextBucket;
-              upload = await tryUpload(usedBucket);
-            }
-          }
-          pathToUse = `${user.id}/${Date.now()}_${Math.random().toString(16).slice(2)}_${safeName}`;
-          upload = await supabase.storage.from(usedBucket).upload(pathToUse, file, {
-            contentType: file.type || undefined,
-            upsert: false,
-          });
-        }
-
-        if (upload.error) {
-          const msg = (upload.error as any)?.message || '';
-          if (/bucket.*not.*found/i.test(msg)) {
-            throw new Error(
-              `Supabase Storage bucket not found. Tried: ${bucketCandidates.map((b) => `"${b}"`).join(', ')}. Set SUPABASE_STORAGE_BUCKET (VITE_SUPABASE_STORAGE_BUCKET or NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET) to your existing bucket name (e.g. "sos-attachment"), then restart the frontend dev server.`
-            );
-          }
-          throw new Error(upload.error.message || 'Upload failed');
-        }
-
-        uploadedPaths.push(pathToUse);
+      const uploaded = await sosService.uploadAttachments(mediaFiles);
+      const uploadedPaths = Array.isArray(uploaded?.paths) ? uploaded.paths : [];
+      if (uploadedPaths.length === 0) {
+        throw new Error('Upload failed');
       }
 
       await sosService.createSOS({
@@ -656,47 +602,72 @@ export default function StudentDashboard() {
   }, [chatOpen, chatSosId, chatSecurityEmail]);
 
   useEffect(() => {
-    // Initialize sensors
+    let cancelled = false;
+    let audio: AudioSensor | null = null;
+    let motion: MotionSensor | null = null;
+    let audioInterval: number | null = null;
+    let handleMotion: ((event: DeviceMotionEvent) => void) | null = null;
+
     const initSensors = async () => {
       try {
-        const audio = new AudioSensor();
+        audio = new AudioSensor();
         await audio.initialize();
-        // Explicitly set to normal sensitivity (presentation mode off)
         audio.setPresentationMode(false);
+
+        if (cancelled) {
+          audio.stop();
+          audio = null;
+          return;
+        }
+
         setAudioSensorInstance(audio);
 
-        const motion = new MotionSensor();
-        if (motion.isSupported()) {
+        audioInterval = window.setInterval(() => {
+          if (!audio) return;
+          const data = audio.getAudioData();
+          setAudioData(data);
+        }, 200);
+
+        motion = new MotionSensor();
+        if (!motion.isSupported()) return;
+
+        try {
           await motion.initialize();
-
-          const handleMotion = (event: DeviceMotionEvent) => {
-            const data = motion.handleMotionEvent(event);
-            setMotionData(data);
-          };
-
-          window.addEventListener('devicemotion', handleMotion as any);
-
-          // Update audio data
-          const audioInterval = setInterval(() => {
-            const data = audio.getAudioData();
-            setAudioData(data);
-          }, 200);
-
-          return () => {
-            audio.stop();
-            motion.stop();
-            window.removeEventListener('devicemotion', handleMotion as any);
-            clearInterval(audioInterval);
-          };
-        } else {
-          audio.stop();
+        } catch (e) {
+          console.error('Motion sensor init failed:', e);
+          return;
         }
+
+        if (cancelled) return;
+
+        handleMotion = (event: DeviceMotionEvent) => {
+          if (!motion) return;
+          const data = motion.handleMotionEvent(event);
+          setMotionData(data);
+        };
+        window.addEventListener('devicemotion', handleMotion as any);
       } catch (error) {
         console.error('Failed to initialize sensors:', error);
       }
     };
 
     initSensors();
+
+    return () => {
+      cancelled = true;
+      if (audioInterval !== null) {
+        clearInterval(audioInterval);
+        audioInterval = null;
+      }
+      if (handleMotion) {
+        window.removeEventListener('devicemotion', handleMotion as any);
+        handleMotion = null;
+      }
+      motion?.stop();
+      audio?.stop();
+      motion = null;
+      audio = null;
+    };
   }, []);
 
   // Update audio sensor sensitivity when presentation mode changes

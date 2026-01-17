@@ -38,7 +38,10 @@ export const authService = {
 
   async login(data: LoginData): Promise<AuthResponse> {
     const response = await api.post('/auth/login', data);
-    localStorage.setItem('accessToken', response.data.accessToken);
+    const cleanedToken = String(response.data.accessToken || '')
+      .trim()
+      .replace(/^Bearer\s+/i, '');
+    localStorage.setItem('accessToken', cleanedToken);
     return response.data;
   },
 
