@@ -5,7 +5,8 @@ type EnvKey =
   | 'SUPABASE_URL'
   | 'SUPABASE_ANON_KEY'
   | 'SUPABASE_STORAGE_BUCKET'
-  | 'MAPBOX_TOKEN';
+  | 'MAPBOX_TOKEN'
+  | 'MAPBOX_ACCESS_TOKEN';
 
 function readEnvRaw(key: EnvKey): string | undefined {
   const env = (import.meta as any).env || {};
@@ -79,6 +80,6 @@ export const appEnv = {
   },
 
   mapboxToken(): string | undefined {
-    return readEnvRaw('MAPBOX_TOKEN');
+    return readEnvRaw('MAPBOX_ACCESS_TOKEN') || readEnvRaw('MAPBOX_TOKEN');
   },
 };

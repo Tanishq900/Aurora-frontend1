@@ -345,7 +345,9 @@ export default function AuroraMap({
     <div className="relative w-full rounded-lg overflow-hidden" style={{ height }}>
       {tokenMissing || initError ? (
         <div className="w-full h-full flex items-center justify-center bg-slate-700 text-slate-200 text-sm px-4 text-center">
-          {tokenMissing ? 'Map is not configured. Set MAPBOX_TOKEN.' : initError}
+          {tokenMissing
+            ? 'Map is not configured. Set VITE_MAPBOX_ACCESS_TOKEN (or VITE_MAPBOX_TOKEN).'
+            : initError}
         </div>
       ) : (
         <div ref={mapContainer} className="w-full h-full" />
