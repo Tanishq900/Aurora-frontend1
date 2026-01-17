@@ -40,3 +40,4 @@ npm run dev
 "# aurorafrontend-sentinel" 
 "# aurorafrontend-sentinel" 
 "# aurorafrontendsentinel" 
+"# Aurora-frontend1" 
